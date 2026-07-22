@@ -147,7 +147,7 @@ closeButton.Size = UDim2.new(0, 26, 0, 26)
 closeButton.Position = UDim2.new(1, -32, 0, 10)
 closeButton.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
 closeButton.BackgroundTransparency = 0.2
-closeButton.Text = "X"
+closeButton.Text = "❌"
 closeButton.TextColor3 = Color3.fromRGB(255, 100, 100)
 closeButton.TextSize = 13
 closeButton.Font = Enum.Font.GothamBold
@@ -297,7 +297,7 @@ local hideHintLabel = Instance.new("TextLabel")
 hideHintLabel.Size = UDim2.new(1, 0, 0, 18)
 hideHintLabel.Position = UDim2.new(0, 0, 0, 272)
 hideHintLabel.BackgroundTransparency = 1
-hideHintLabel.Text = "Hide UI: [ RightShift ]"
+hideHintLabel.Text = "Hide UI: [ K ]"
 hideHintLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
 hideHintLabel.TextSize = 10
 hideHintLabel.Font = Enum.Font.Gotham
@@ -546,7 +546,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         toggleScript()
     elseif input.KeyCode == Enum.KeyCode.P then
         saveCurrentPosition()
-    elseif input.KeyCode == Enum.KeyCode.RightShift then
+    elseif input.KeyCode == Enum.KeyCode.K or input.KeyCode == Enum.KeyCode.L then
         toggleUI()
     end
 end)
