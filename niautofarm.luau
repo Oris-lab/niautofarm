@@ -134,7 +134,7 @@ keyTextBox.TextColor3 = Color3.fromRGB(240, 240, 240)
 keyTextBox.TextSize = 14
 keyTextBox.Font = Enum.Font.Gotham
 keyTextBox.PlaceholderText = "Paste your key here..."
-keyTextBox.Text = savedKey -- подставляем сохраненный ключ автоматически
+keyTextBox.Text = savedKey
 keyTextBox.ClearTextOnFocus = false
 keyTextBox.Parent = keyFrame
 createCorner(keyTextBox, 6)
@@ -154,7 +154,6 @@ createCorner(submitKeyButton, 6)
 
 screenGui.Enabled = false
 
--- Автоматическая проверка ключа, если он уже был сохранен и верен
 if savedKey == correctKey then
     isKeyValid = true
     keyScreenGui:Destroy()
@@ -377,7 +376,7 @@ submitKeyButton.MouseButton1Click:Connect(function()
     savedKey = keyTextBox.Text
     if savedKey == correctKey then
         isKeyValid = true
-        saveConfig() -- сохраняем правильный ключ в файл
+        saveConfig()
         pcall(function() keyScreenGui:Destroy() end)
         screenGui.Enabled = true
     else
@@ -458,8 +457,10 @@ local function usePortal(portalName)
 end
 
 local function teleportToSavedPosition()
+    -- Даем время игре обработать выход из триала перед телепортацией
+    task.wait(0.5)
     usePortal("__TrialExitTeleport")
-    task.wait(0.3)
+    task.wait(0.5)
     
     local character = player.Character
     if character and character:FindFirstChild("HumanoidRootPart") then
@@ -469,8 +470,10 @@ local function teleportToSavedPosition()
         end
         
         local hrp = character.HumanoidRootPart
+        -- Принудительно устанавливаем позицию с небольшой задержкой для надежности
         hrp.CFrame = CFrame.new(savedPosition)
-        task.wait(0.1)
+        task.wait(0.2)
+        hrp.CFrame = CFrame.new(savedPosition)
         return true
     end
     return false
@@ -521,9 +524,7 @@ local function leaveTrial()
         VirtualInputManager:SendMouseButtonEvent(viewportSize.X * 0.5, viewportSize.Y * 0.9, 0, false, game, 0)
     end
     
-    task.wait(0.8)
-    usePortal("__TrialExitTeleport")
-    task.wait(0.8)
+    task.wait(1.0)
 end
 
 local function getCurrentWave()
@@ -675,16 +676,14 @@ task.spawn(function()
             if success and isRunning then
                 updateStatus("Mob Farming", Color3.fromRGB(80, 220, 80))
                 
+                local targetReached = false
                 while isKeyValid and isRunning and not isBetweenRuns and not checkErrorTemplate() do
                     local currentWave = getCurrentWave()
                     waveInfoLabel.Text = "Wave: " .. currentWave .. " / Target: " .. maxTargetWave
                     
                     if currentWave >= maxTargetWave and maxTargetWave > 0 then
                         leaveTrial()
-                        teleportToSavedPosition()
-                        isBetweenRuns = true
-                        updateStatus("Target reached. Waiting...", Color3.fromRGB(120, 120, 220))
-                        task.wait(5)
+                        targetReached = true
                         break
                     else
                         for index, pos in ipairs(mobPositions) do
@@ -695,9 +694,7 @@ task.spawn(function()
                             
                             if activeWave >= maxTargetWave and maxTargetWave > 0 then
                                 leaveTrial()
-                                teleportToSavedPosition()
-                                isBetweenRuns = true
-                                updateStatus("Target reached. Waiting...", Color3.fromRGB(120, 120, 220))
+                                targetReached = true
                                 break
                             end
                             
@@ -710,6 +707,8 @@ task.spawn(function()
                             end
                         end
                         
+                        if targetReached then break end
+                        
                         if isRunning and not isBetweenRuns then
                             local elapsed = 0
                             while elapsed < 3 and isRunning and not isBetweenRuns and not checkErrorTemplate() do
@@ -720,7 +719,12 @@ task.spawn(function()
                     end
                 end
                 
-                if checkErrorTemplate() then
+                if targetReached then
+                    teleportToSavedPosition()
+                    isBetweenRuns = true
+                    updateStatus("Target reached. Waiting...", Color3.fromRGB(120, 120, 220))
+                    task.wait(5)
+                elseif checkErrorTemplate() then
                     updateStatus("Error! Recovering...", Color3.fromRGB(220, 120, 0))
                     teleportToSavedPosition()
                     isBetweenRuns = true
