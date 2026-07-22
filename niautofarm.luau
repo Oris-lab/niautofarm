@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local TweenService = game:GetService("TweenService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -35,6 +36,14 @@ local moveSpeedMultiplier = 1.0
 local targetMinutes = {29, 59}
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+task.spawn(function()
+    local connection
+    connection = player.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end)
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "TrialFarmGUI"
