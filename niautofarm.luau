@@ -4,6 +4,7 @@ local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -24,16 +25,58 @@ local mobPositions = {
 
 local platePosition = Vector3.new(907.6802368164062, 14.440231323242188, 13440.5947265625)
 
+-- Настройки по умолчанию
 local savedPosition = platePosition 
 local hasSavedPosition = false
-
 local isRunning = false
 local isWaitingOnPlate = false
 local isBetweenRuns = false
 local maxTargetWave = 20
 local moveSpeedMultiplier = 1.0
+local savedKey = ""
 
 local targetMinutes = {29, 59}
+local configFileName = "TrialFarmConfig.json"
+
+-- Функция загрузки конфигурации из файла экзекютора
+local function loadConfig()
+    if pcall(function()
+        if isfile and isfile(configFileName) then
+            local content = readfile(configFileName)
+            local data = HttpService:JSONDecode(content)
+            if data then
+                if data.maxTargetWave then maxTargetWave = data.maxTargetWave end
+                if data.moveSpeedMultiplier then moveSpeedMultiplier = data.moveSpeedMultiplier end
+                if data.savedKey then savedKey = data.savedKey end
+                if data.savedPosX and data.savedPosY and data.savedPosZ then
+                    savedPosition = Vector3.new(data.savedPosX, data.savedPosY, data.savedPosZ)
+                    hasSavedPosition = data.hasSavedPosition or true
+                end
+            end
+        end
+    end) then
+        print("[TrialFarm]: Config loaded successfully!")
+    end
+end
+
+-- Функция сохранения конфигурации в файл экзекютора
+local function saveConfig()
+    pcall(function()
+        local data = {
+            maxTargetWave = maxTargetWave,
+            moveSpeedMultiplier = moveSpeedMultiplier,
+            savedKey = savedKey,
+            hasSavedPosition = hasSavedPosition,
+            savedPosX = savedPosition.X,
+            savedPosY = savedPosition.Y,
+            savedPosZ = savedPosition.Z
+        }
+        writefile(configFileName, HttpService:JSONEncode(data))
+    end)
+end
+
+-- Загружаем при старте
+loadConfig()
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -91,7 +134,7 @@ keyTextBox.TextColor3 = Color3.fromRGB(240, 240, 240)
 keyTextBox.TextSize = 14
 keyTextBox.Font = Enum.Font.Gotham
 keyTextBox.PlaceholderText = "Paste your key here..."
-keyTextBox.Text = ""
+keyTextBox.Text = savedKey -- подставляем сохраненный ключ автоматически
 keyTextBox.ClearTextOnFocus = false
 keyTextBox.Parent = keyFrame
 createCorner(keyTextBox, 6)
@@ -110,6 +153,13 @@ submitKeyButton.Parent = keyFrame
 createCorner(submitKeyButton, 6)
 
 screenGui.Enabled = false
+
+-- Автоматическая проверка ключа, если он уже был сохранен и верен
+if savedKey == correctKey then
+    isKeyValid = true
+    keyScreenGui:Destroy()
+    screenGui.Enabled = true
+end
 
 local mobileToggleButton = nil
 if isMobile then
@@ -166,7 +216,7 @@ createCorner(closeButton, 6)
 closeButton.MouseButton1Click:Connect(function()
     isRunning = false
     screenGui:Destroy()
-    keyScreenGui:Destroy()
+    pcall(function() keyScreenGui:Destroy() end)
 end)
 
 local statusLabel = Instance.new("TextLabel")
@@ -195,7 +245,10 @@ createCorner(waveInputBox, 6)
 
 waveInputBox:GetPropertyChangedSignal("Text"):Connect(function()
     local val = tonumber(waveInputBox.Text)
-    if val then maxTargetWave = val end
+    if val then 
+        maxTargetWave = val 
+        saveConfig()
+    end
 end)
 
 local speedLabel = Instance.new("TextLabel")
@@ -219,7 +272,7 @@ sliderBg.Parent = mainFrame
 createCorner(sliderBg, 4)
 
 local sliderFill = Instance.new("Frame")
-local initialPercent = (moveSpeedMultiplier - 0.1) / (3.0 - 0.1)
+local initialPercent = math.clamp((moveSpeedMultiplier - 0.1) / (3.0 - 0.1), 0, 1)
 sliderFill.Size = UDim2.new(initialPercent, 0, 1, 0)
 sliderFill.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
 sliderFill.BorderSizePixel = 0
@@ -239,7 +292,10 @@ end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingSlider = false
+        if draggingSlider then
+            draggingSlider = false
+            saveConfig()
+        end
     end
 end)
 
@@ -296,8 +352,8 @@ local posStatusLabel = Instance.new("TextLabel")
 posStatusLabel.Size = UDim2.new(1, 0, 0, 18)
 posStatusLabel.Position = UDim2.new(0, 0, 0, 244)
 posStatusLabel.BackgroundTransparency = 1
-posStatusLabel.Text = "Error Position: Not Saved"
-posStatusLabel.TextColor3 = Color3.fromRGB(220, 100, 100)
+posStatusLabel.Text = hasSavedPosition and "Position Saved!" or "Error Position: Not Saved"
+posStatusLabel.TextColor3 = hasSavedPosition and Color3.fromRGB(100, 220, 100) or Color3.fromRGB(220, 100, 100)
 posStatusLabel.TextSize = 11
 posStatusLabel.Font = Enum.Font.Gotham
 posStatusLabel.Parent = mainFrame
@@ -318,9 +374,11 @@ local function updateStatus(text, color)
 end
 
 submitKeyButton.MouseButton1Click:Connect(function()
-    if keyTextBox.Text == correctKey then
+    savedKey = keyTextBox.Text
+    if savedKey == correctKey then
         isKeyValid = true
-        keyScreenGui:Destroy()
+        saveConfig() -- сохраняем правильный ключ в файл
+        pcall(function() keyScreenGui:Destroy() end)
         screenGui.Enabled = true
     else
         submitKeyButton.Text = "Invalid Key!"
@@ -336,6 +394,7 @@ local function saveCurrentPosition()
     if character and character:FindFirstChild("HumanoidRootPart") then
         savedPosition = character.HumanoidRootPart.CFrame.Position
         hasSavedPosition = true
+        saveConfig()
         posStatusLabel.Text = "Position Saved!"
         posStatusLabel.TextColor3 = Color3.fromRGB(100, 220, 100)
     else
@@ -405,11 +464,8 @@ local function teleportToSavedPosition()
     local character = player.Character
     if character and character:FindFirstChild("HumanoidRootPart") then
         if not hasSavedPosition then
-            isRunning = false
-            toggleButton.Text = "Enable (G)"
-            toggleButton.BackgroundColor3 = Color3.fromRGB(35, 110, 55)
-            updateStatus("Error: Position not saved!", Color3.fromRGB(220, 80, 80))
-            return false
+            savedPosition = platePosition
+            hasSavedPosition = true
         end
         
         local hrp = character.HumanoidRootPart
@@ -433,21 +489,25 @@ local function leaveTrial()
     local found = false
     
     for _, descendant in ipairs(playerGui:GetDescendants()) do
-        if descendant.Name:lower() == "leavetrial" then
-            if descendant:IsA("GuiButton") then
-                for _, connection in ipairs(getconnections(descendant.MouseButton1Click)) do connection:Fire() end
-                for _, connection in ipairs(getconnections(descendant.Activated)) do connection:Fire() end
-                found = true
-                break
-            elseif descendant:IsA("TextButton") or descendant:IsA("ImageButton") then
-                local absPos = descendant.AbsolutePosition
-                local absSize = descendant.AbsoluteSize
+        if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
+            if string.find(descendant.Text:lower(), "leave trial") then
+                local btn = descendant:FindFirstAncestorWhichIsA("GuiButton") or descendant
+                if btn:IsA("GuiButton") then
+                    pcall(function()
+                        for _, connection in ipairs(getconnections(btn.MouseButton1Click)) do connection:Fire() end
+                        for _, connection in ipairs(getconnections(btn.Activated)) do connection:Fire() end
+                    end)
+                end
+                
+                local absPos = btn.AbsolutePosition
+                local absSize = btn.AbsoluteSize
                 local targetX = absPos.X + absSize.X / 2
                 local targetY = absPos.Y + absSize.Y / 2
                 
                 VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, true, game, 0)
                 task.wait(0.05)
                 VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, false, game, 0)
+                
                 found = true
                 break
             end
@@ -456,9 +516,9 @@ local function leaveTrial()
     
     if not found then
         local viewportSize = camera.ViewportSize
-        VirtualInputManager:SendMouseButtonEvent(viewportSize.X * 0.5, viewportSize.Y * 0.5, 0, true, game, 0)
+        VirtualInputManager:SendMouseButtonEvent(viewportSize.X * 0.5, viewportSize.Y * 0.9, 0, true, game, 0)
         task.wait(0.05)
-        VirtualInputManager:SendMouseButtonEvent(viewportSize.X * 0.5, viewportSize.Y * 0.5, 0, false, game, 0)
+        VirtualInputManager:SendMouseButtonEvent(viewportSize.X * 0.5, viewportSize.Y * 0.9, 0, false, game, 0)
     end
     
     task.wait(0.8)
@@ -468,13 +528,32 @@ end
 
 local function getCurrentWave()
     for _, descendant in ipairs(playerGui:GetDescendants()) do
-        if descendant:IsA("TextLabel") and (descendant.Name == "WaveCount" or string.match(descendant.Text:lower(), "wave")) then
-            for num in string.gmatch(descendant.Text, "%d+") do
-                local n = tonumber(num)
-                if n and n > 0 and n <= 100 then return n end
+        if descendant:IsA("TextLabel") then
+            local nameLower = descendant.Name:lower()
+            local textLower = descendant.Text:lower()
+            
+            if nameLower == "wavecount" or string.find(textLower, "wave") or string.find(textLower, "волн") then
+                for num in string.gmatch(descendant.Text, "%d+") do
+                    local n = tonumber(num)
+                    if n and n > 0 and n <= 100 then 
+                        return n 
+                    end
+                end
             end
         end
     end
+    
+    for _, descendant in ipairs(playerGui:GetDescendants()) do
+        if descendant:IsA("TextLabel") and descendant.Visible and descendant.Text ~= "" then
+            for num in string.gmatch(descendant.Text, "%d+") do
+                local n = tonumber(num)
+                if n and n > 0 and n <= 50 then
+                    return n
+                end
+            end
+        end
+    end
+    
     return 0
 end
 
@@ -493,13 +572,11 @@ local function startTrialSequenceWithPlate()
     local elapsed = 0
     while elapsed < 60 and isRunning do
         if checkErrorTemplate() then
-            updateStatus("Error! Checking position...", Color3.fromRGB(220, 120, 0))
-            if not teleportToSavedPosition() then
-                isWaitingOnPlate = false
-                return false
-            end
+            updateStatus("Error! Recovering...", Color3.fromRGB(220, 120, 0))
+            teleportToSavedPosition()
             isWaitingOnPlate = false
             isBetweenRuns = true
+            task.wait(5)
             return false
         end
         task.wait(1)
@@ -508,13 +585,11 @@ local function startTrialSequenceWithPlate()
     end
     
     if checkErrorTemplate() then
-        updateStatus("Error! Checking position...", Color3.fromRGB(220, 120, 0))
-        if not teleportToSavedPosition() then
-            isWaitingOnPlate = false
-            return false
-        end
+        updateStatus("Error! Recovering...", Color3.fromRGB(220, 120, 0))
+        teleportToSavedPosition()
         isWaitingOnPlate = false
         isBetweenRuns = true
+        task.wait(5)
         return false
     end
     
@@ -606,7 +681,7 @@ task.spawn(function()
                     
                     if currentWave >= maxTargetWave and maxTargetWave > 0 then
                         leaveTrial()
-                        if not teleportToSavedPosition() then break end
+                        teleportToSavedPosition()
                         isBetweenRuns = true
                         updateStatus("Target reached. Waiting...", Color3.fromRGB(120, 120, 220))
                         task.wait(5)
@@ -620,7 +695,7 @@ task.spawn(function()
                             
                             if activeWave >= maxTargetWave and maxTargetWave > 0 then
                                 leaveTrial()
-                                if not teleportToSavedPosition() then break end
+                                teleportToSavedPosition()
                                 isBetweenRuns = true
                                 updateStatus("Target reached. Waiting...", Color3.fromRGB(120, 120, 220))
                                 break
@@ -646,8 +721,10 @@ task.spawn(function()
                 end
                 
                 if checkErrorTemplate() then
-                    updateStatus("Error! Checking position...", Color3.fromRGB(220, 120, 0))
+                    updateStatus("Error! Recovering...", Color3.fromRGB(220, 120, 0))
                     teleportToSavedPosition()
+                    isBetweenRuns = true
+                    task.wait(5)
                 end
             end
         else
