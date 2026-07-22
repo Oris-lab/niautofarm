@@ -286,7 +286,7 @@ waveInfoLabel.Parent = mainFrame
 local posStatusLabel = Instance.new("TextLabel")
 posStatusLabel.Size = UDim2.new(1, 0, 0, 18)
 posStatusLabel.Position = UDim2.new(0, 0, 0, 244)
-posStatusLabel.BackgroundTransparency, 1
+posStatusLabel.BackgroundTransparency = 1
 posStatusLabel.Text = "Error Position: Not Saved"
 posStatusLabel.TextColor3 = Color3.fromRGB(220, 100, 100)
 posStatusLabel.TextSize = 11
@@ -541,12 +541,12 @@ if mobileToggleButton then
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not isKeyValid or gameProcessed then return end
+    if not isKeyValid then return end
     if input.KeyCode == Enum.KeyCode.G then
         toggleScript()
     elseif input.KeyCode == Enum.KeyCode.P then
         saveCurrentPosition()
-    elseif input.KeyCode == Enum.KeyCode.K then
+    elseif input.KeyCode == Enum.KeyCode.K or input.KeyCode == Enum.KeyCode.L then
         toggleUI()
     end
 end)
