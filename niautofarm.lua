@@ -22,6 +22,7 @@ local isLeaving = false
 local isMoving = false
 local isWaiting = false
 local isEntering = false
+local isInTrial = false
 
 task.spawn(function()
     while true do
@@ -163,6 +164,7 @@ local function enterTrial()
     if isEntering then return end
     isEntering = true
     pcall(function()
+        -- Шаг 1: телепорт на входную плиту
         local entryPlate = getPlateCFrame("__TrialTeleport")
         if entryPlate then
             teleportTo(entryPlate)
@@ -171,6 +173,7 @@ local function enterTrial()
             isEntering = false
             return
         end
+        -- Шаг 2: телепорт на плиту выбора сложности
         local diffPlate = getDifficultyPlateCFrame(CONFIG.SelectedDifficulty)
         if diffPlate then
             teleportTo(diffPlate)
@@ -179,6 +182,7 @@ local function enterTrial()
             isEntering = false
             return
         end
+        -- Шаг 3: ожидание 60 секунд или начала триала
         local startTime = tick()
         local trialStarted = false
         while tick() - startTime < 60 do
@@ -189,17 +193,24 @@ local function enterTrial()
             end
             task.wait(1)
         end
+        -- Шаг 4: если триал не начался – принудительный телепорт
         if not trialStarted then
             local roomCFrame = getRoomCFrame(CONFIG.SelectedDifficulty)
             if roomCFrame then
                 teleportTo(roomCFrame)
                 task.wait(2)
+                trialStarted = true
             else
                 isEntering = false
                 return
             end
         end
-        if CONFIG.GrindEnabled and not isFarming then
+        -- Шаг 5: теперь мы точно в триале
+        if trialStarted then
+            isInTrial = true
+        end
+        -- Шаг 6: запуск фарма, если включен
+        if CONFIG.GrindEnabled and not isFarming and isInTrial then
             task.wait(1)
             startGrindLoop()
         end
@@ -212,6 +223,7 @@ local function leaveTrial()
     isLeaving = true
     isFarming = false
     CONFIG.GrindEnabled = false
+    isInTrial = false
     pcall(function()
         local mainRemote = ReplicatedStorage:FindFirstChild("__Net") and ReplicatedStorage.__Net:FindFirstChild("MainRemote")
         if mainRemote then
@@ -258,6 +270,10 @@ local function startGrindLoop()
                 task.wait(0.5)
                 continue
             end
+            if not isInTrial then
+                task.wait(0.5)
+                continue
+            end
             local currentWave = getCurrentWave()
             if currentWave <= 0 then
                 task.wait(0.5)
@@ -283,10 +299,11 @@ local function startGrindLoop()
                     local distance = (hrp.Position - mobsPositions[posIndex]).Magnitude
                     if distance > 4 then
                         safeMoveTo(CFrame.new(mobsPositions[posIndex]))
+                        task.wait(0.3)
                     end
                 end
             end
-            task.wait(0.3)
+            task.wait(0.2)
         end
         isFarming = false
     end)
@@ -365,7 +382,7 @@ MainTab:CreateToggle({
     Callback = function(Value)
         CONFIG.GrindEnabled = Value
         if Value then
-            if getCurrentWave() > 0 and not isFarming then
+            if isInTrial and getCurrentWave() > 0 and not isFarming then
                 task.wait(1)
                 startGrindLoop()
             end
